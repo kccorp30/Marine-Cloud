@@ -1,0 +1,44 @@
+# Files changed in the latest visual evolution package
+
+- `app/(app)/company/page.tsx`
+- `app/(app)/customer/page.tsx`
+- `app/(app)/customers/[id]/page.tsx`
+- `app/(app)/estimates/[id]/page.tsx`
+- `app/(app)/team/[profileId]/page.tsx`
+- `app/(app)/team/page.tsx`
+- `app/(app)/vessels/[id]/page.tsx`
+- `app/(app)/vessels/page.tsx`
+- `app/(app)/work-orders/[id]/page.tsx`
+- `app/(app)/work-orders/page.tsx`
+- `app/globals.css`
+- `components/auth/CompanyLogoForm.tsx`
+- `components/auth/ProfileSetup.tsx`
+- `components/estimates/EstimateDocument.tsx`
+- `components/estimates/PaymentMethods.tsx`
+- `components/estimates/SendEstimateEmailButton.tsx`
+- `components/layout/Sidebar.tsx`
+- `components/notifications/NotificationBell.tsx`
+- `components/notifications/NotificationInbox.tsx`
+- `components/notifications/NotificationItem.tsx`
+- `components/smart/Drawer.tsx`
+- `components/smart/Profile.tsx`
+- `components/team/DeactivateMember.tsx`
+- `components/team/RoleSelect.tsx`
+- `components/tracking/TrackingStatusPanel.tsx`
+- `components/ui/ActionForm.tsx`
+- `components/work-orders/CreateWorkOrderFlow.tsx`
+- `docs/UX-CHANGED-FILES.md`
+- `docs/UX-EVOLUTION.md`
+- `docs/VALIDATION.md`
+- `lib/communications/actions.ts`
+- `lib/company/logo-action.ts`
+- `lib/email/estimate-template.ts`
+- `lib/estimates/email-preview.ts`
+- `lib/i18n/workspace-copy.ts`
+- `lib/image-upload.ts`
+- `lib/notifications/actions.ts`
+- `lib/team/actions.ts`
+- `lib/work-orders/actions.ts`
+- `tests/estimate-template.test.ts`
+
+- `app/(app)/dashboard/page.tsx`
