@@ -1,0 +1,8 @@
+import {createClient} from '@/lib/supabase/server';
+import {Drawer} from '@/components/smart/Drawer';
+export async function PaymentMethods({estimateId,locale}:{estimateId:string;locale:string}){
+ const db=await createClient();const {data:estimate}=await db.from('estimates').select('organization_id').eq('id',estimateId).maybeSingle();if(!estimate)return null;
+ const {data:p}=await db.from('organization_payment_settings').select('manual_payments_enabled,accepted_payment_methods,zelle_recipient_name,zelle_contact,zelle_instructions,bank_transfer_instructions,cash_instructions,check_payable_to,check_instructions').eq('organization_id',estimate.organization_id).maybeSingle();if(!p?.manual_payments_enabled)return null;
+ const es=locale==='es';const methods=[{id:'cash',icon:'$',label:es?'Efectivo':'Cash',detail:p.cash_instructions},{id:'zelle',icon:'Z',label:'Zelle',detail:[p.zelle_recipient_name,p.zelle_contact,p.zelle_instructions].filter(Boolean).join('\n')},{id:'bank_transfer',icon:'⇄',label:es?'Transferencia':'Bank transfer',detail:p.bank_transfer_instructions},{id:'check',icon:'✓',label:es?'Cheque':'Check',detail:[p.check_payable_to,p.check_instructions].filter(Boolean).join('\n')}].filter(m=>p.accepted_payment_methods?.includes(m.id));if(!methods.length)return null;
+ return <div className="my-5"><div className="kcc-actions">{methods.map(m=><Drawer key={m.id} label={<><span aria-hidden="true">{m.icon}</span>{m.label}</>} title={m.label}><p className="whitespace-pre-wrap leading-relaxed">{m.detail||(es?'Solicita las instrucciones de pago a tu compañía.':'Contact your company for payment instructions.')}</p></Drawer>)}</div></div>;
+}

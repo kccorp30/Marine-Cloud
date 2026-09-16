@@ -1,0 +1,7 @@
+import { convertToWorkOrderAction } from '@/lib/estimates/actions';
+
+export function ApprovedEstimateMission({estimateId,workOrderId,locale='en'}:{estimateId:string;workOrderId?:string|null;locale?:string}){
+  const es=locale==='es';
+  if(workOrderId) return <div className="approved-mission-card"><span className="mission-check">✓</span><div><p className="command-kicker">{es?'TRABAJO ACTIVADO':'JOB ACTIVATED'}</p><h3>{es?'Este estimado ya es una misión de servicio':'This estimate is now a service mission'}</h3><p>{es?'Abre la orden para asignar técnico, horario y comenzar el seguimiento.':'Open the work order to assign a technician, schedule it and begin tracking.'}</p></div><a href={`/work-orders/${workOrderId}`} className="command-button">{es?'ABRIR MISIÓN':'OPEN MISSION'} →</a></div>;
+  return <div className="approved-mission-card is-ready"><span className="mission-check">✓</span><div><p className="command-kicker">✦ LUZ · {es?'LISTO PARA OPERACIONES':'READY FOR OPERATIONS'}</p><h3>{es?'El cliente aprobó este trabajo':'The customer approved this work'}</h3><p>{es?'Actívalo como misión. Marine Cloud preparará la orden en estado programable sin perder el historial de aprobación.':'Activate it as a mission. Marine Cloud will prepare a dispatch-ready work order without losing the approval history.'}</p></div><form action={convertToWorkOrderAction.bind(null,estimateId)}><button type="submit" className="command-button">{es?'ACTIVAR TRABAJO':'ACTIVATE JOB'} →</button></form></div>;
+}

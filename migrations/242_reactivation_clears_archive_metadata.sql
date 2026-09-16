@@ -1,0 +1,11 @@
+-- =========================================================
+-- 242_reactivation_clears_archive_metadata.sql — Phase 14 true final closure
+-- =========================================================
+-- DECISIÓN EXPLÍCITA (Opción A): reactivate_organization() limpia
+-- archived_at/archived_by/archive_reason — nunca debe verse
+-- "todavía archivada" en sus campos actuales. Evidencia histórica
+-- preservada en audit_events. Reactivación NUNCA revive la
+-- suscripción cancelada.
+-- NOTA: esta versión tenía un bug real de captura de "before" —
+-- corregido en 243 aplicada inmediatamente después.
+-- =========================================================
