@@ -6,7 +6,10 @@ import { createClient } from '@/lib/supabase/server';
 import { getSessionContext } from '@/lib/auth/session';
 import { getActiveOrganizationId } from '@/lib/auth/active-org';
 import { Card, PageTitle, StatusBadge } from '@/components/ui/primitives';
-import { RelativeTime } from '@/components/work-orders/Timeline';
+import { RelativeTime } from '@/components/ui/RelativeTime';
+import { ActionForm } from '@/components/ui/ActionForm';
+import { updateVesselServiceAddress } from '@/lib/work-orders/actions';
+import { inputClass, Field, SubmitButton } from '@/components/ui/primitives';
 
 interface VesselDetail {
   id: string;
@@ -18,6 +21,10 @@ interface VesselDetail {
   vessel_type: string | null;
   length: number | null;
   marina: string | null;
+  service_street_address: string | null;
+  service_city: string | null;
+  service_state: string | null;
+  service_postal_code: string | null;
   status: string;
   customer: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null;
 }
@@ -51,14 +58,18 @@ export default async function VesselDetailPage({ params }: { params: Promise<{ i
   const session = await getSessionContext();
   const activeOrgId = await getActiveOrganizationId(session.memberships);
   const isCustomer = session.memberships.find((m) => m.organization_id === activeOrgId)?.role === 'customer';
+  const memberRole = session.memberships.find((m) => m.organization_id === activeOrgId)?.role;
+  const isStaff = session.isKccAdmin || ['company_owner', 'company_admin', 'manager'].includes(memberRole ?? '');
 
   const { data: vessel } = await supabase
     .from('vessels')
-    .select('id, name, hin, make, model, year, vessel_type, length, marina, status, customer:customers(first_name, last_name)')
+    .select('id, name, hin, make, model, year, vessel_type, length, marina, service_street_address, service_city, service_state, service_postal_code, status, customer:customers(first_name, last_name)')
     .eq('id', id)
     .maybeSingle<VesselDetail>();
 
   if (!vessel) notFound(); // RLS ya filtró — sin distinguir "no existe" de "no autorizado"
+
+  const hasServiceLocation = Boolean(vessel.service_street_address?.trim() || vessel.marina?.trim());
 
   const { data: systems } = await supabase
     .from('vessel_systems')
@@ -125,6 +136,45 @@ export default async function VesselDetailPage({ params }: { params: Promise<{ i
           <dt className="text-cool-gray">Status</dt>
           <dd className="capitalize">{vessel.status}</dd>
         </dl>
+      </Card>
+
+      <Card className="mb-6">
+        <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-gold mb-3">Service Location</div>
+        {!hasServiceLocation && (
+          <p className="text-xs text-amber-400 mb-3">
+            Service location required — a technician cannot start route to this vessel until this is set.
+          </p>
+        )}
+        {hasServiceLocation && !isStaff && (
+          <p className="text-sm text-marine-white">
+            {[vessel.marina, vessel.service_street_address, vessel.service_city, vessel.service_state].filter(Boolean).join(', ')}
+          </p>
+        )}
+        {isStaff ? (
+          <ActionForm action={updateVesselServiceAddress} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+            <input type="hidden" name="vesselId" value={vessel.id} />
+            <Field label="Marina / Dock">
+              <input name="marina" defaultValue={vessel.marina ?? ''} className={inputClass} placeholder="e.g. Marina Bay Harbor, Dock C" />
+            </Field>
+            <Field label="Street Address">
+              <input name="serviceStreetAddress" defaultValue={vessel.service_street_address ?? ''} className={inputClass} />
+            </Field>
+            <Field label="City">
+              <input name="serviceCity" defaultValue={vessel.service_city ?? ''} className={inputClass} />
+            </Field>
+            <Field label="State">
+              <input name="serviceState" defaultValue={vessel.service_state ?? ''} className={inputClass} />
+            </Field>
+            <Field label="Postal Code">
+              <input name="servicePostalCode" defaultValue={vessel.service_postal_code ?? ''} className={inputClass} />
+            </Field>
+            <div className="sm:col-span-2">
+              <SubmitButton>Save Service Location</SubmitButton>
+            </div>
+          </ActionForm>
+        ) : (
+          !hasServiceLocation && <p className="text-xs text-cool-gray">Ask your company to add a service location for this vessel.</p>
+        )}
       </Card>
 
       {systems && systems.length > 0 && (

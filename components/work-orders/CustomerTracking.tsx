@@ -29,6 +29,7 @@ export async function CustomerTracking({
     technician,
     appointment,
     progressUpdates,
+    mediaByCategory,
   } = tracking;
 
   if (isCancelled) {
@@ -174,6 +175,38 @@ export async function CustomerTracking({
               </li>
             ))}
           </ul>
+        </Card>
+      )}
+
+      {/* F. FOTOS — independiente de progress updates (item 3): toda
+          foto customer_visible del work order, sin importar si un
+          técnico la adjuntó a una actualización o no. */}
+      {Object.keys(mediaByCategory).length > 0 && (
+        <Card>
+          <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-gold mb-3">
+            {" "}
+            <UiText text="Photos" />{" "}
+          </div>
+          <div className="space-y-4">
+            {Object.entries(mediaByCategory).map(([category, items]) => (
+              <div key={category}>
+                <div className="font-mono text-[9px] uppercase tracking-[0.06em] text-cool-gray/70 mb-1.5">
+                  {category.replace(/_/g, " ")}
+                </div>
+                <div className="flex gap-2 overflow-x-auto">
+                  {items.map((m) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={m.id}
+                      src={m.url}
+                      alt={m.caption ?? ""}
+                      className="w-24 h-24 rounded-sm object-cover shrink-0"
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
     </div>

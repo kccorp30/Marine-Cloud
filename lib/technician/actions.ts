@@ -44,6 +44,73 @@ export async function checkOut(checkInId: string, workOrderId: string, closingNo
 }
 
 // ---------------------------------------------------------
+// MULTI-DÍA — una orden puede necesitar varias visitas. Terminar la
+// visita de HOY nunca completa el work order: eso lo decide
+// finish_todays_visit() en la base (cierra check-in, time entries,
+// tracking y appointment, y solo mueve el estado a waiting_parts /
+// waiting_customer_approval vía transition_work_order()).
+// ---------------------------------------------------------
+const VISIT_OUTCOMES = [
+  'continue_tomorrow',
+  'waiting_parts',
+  'waiting_approval',
+  'return_scheduled',
+  'access_weather',
+  'other',
+] as const;
+export type VisitOutcome = (typeof VISIT_OUTCOMES)[number];
+
+export async function finishTodaysVisit(input: {
+  workOrderId: string;
+  outcome: string;
+  summary: string;
+  nextVisitStart?: string | null;
+}) {
+  // Validación local solo para no gastar un round trip con basura
+  // evidente. La autoridad sigue siendo la función de la base, que
+  // vuelve a verificar outcome, resumen, asignación y estado.
+  if (!VISIT_OUTCOMES.includes(input.outcome as VisitOutcome)) {
+    return { error: 'Invalid visit outcome.' };
+  }
+  if (!input.summary?.trim()) {
+    return { error: 'A visit summary is required.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('finish_todays_visit', {
+    p_work_order_id: input.workOrderId,
+    p_outcome: input.outcome,
+    p_summary: input.summary.trim(),
+    p_next_visit_start: input.nextVisitStart || null,
+  });
+  if (error) {
+    logger.warn('finishTodaysVisit rejected', { workOrderId: input.workOrderId, error: error.message });
+    return safeErrorResponse(error, 'Could not finish the visit.');
+  }
+  revalidatePath(`/work-orders/${input.workOrderId}`);
+  revalidatePath('/today');
+  return { success: true };
+}
+
+// Día 2+: el técnico viaja de nuevo a una orden que YA está en
+// progreso. No hay transición de estado — solo el evento
+// TECHNICIAN_EN_ROUTE (con continuation: true), que es lo que hace
+// que compañía y customer vean "en camino" otra vez.
+export async function startContinuationRoute(workOrderId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('technician_start_continuation_route', {
+    p_work_order_id: workOrderId,
+  });
+  if (error) {
+    logger.warn('startContinuationRoute rejected', { workOrderId, error: error.message });
+    return safeErrorResponse(error, 'Could not start the continuation route.');
+  }
+  revalidatePath(`/work-orders/${workOrderId}`);
+  revalidatePath('/today');
+  return { success: true };
+}
+
+// ---------------------------------------------------------
 // Timer — start/stop vía función, nunca insert directo del cliente
 // para el timestamp de inicio.
 // ---------------------------------------------------------

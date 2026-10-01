@@ -12,7 +12,8 @@ import {
   SubmitButton,
   StatusBadge,
 } from "@/components/ui/primitives";
-import { RelativeTime } from "@/components/work-orders/Timeline";
+import { RelativeTime } from "@/components/ui/RelativeTime";
+import { OrganizationRealtimeRefresh } from "@/components/work-orders/OrganizationRealtimeRefresh";
 
 const STATUS_OPTIONS = [
   "request_received",
@@ -91,6 +92,7 @@ export default async function WorkOrdersPage({
 
   return (
     <div className="max-w-4xl">
+      {activeOrgId && <OrganizationRealtimeRefresh organizationId={activeOrgId} />}
       <PageTitle>
         {activeMembership?.role === "technician"
           ? "Assigned Work"

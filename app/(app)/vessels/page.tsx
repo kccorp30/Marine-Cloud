@@ -59,6 +59,23 @@ export default async function VesselsPage() {
             <Field label="Year">
               <input name="year" type="number" className={inputClass} />
             </Field>
+            <div className="sm:col-span-2 pt-2 border-t border-white/10">
+              <div className="font-mono text-[9px] uppercase tracking-[0.08em] text-gold-dim mb-2">
+                Service Location — required before a technician can start route
+              </div>
+            </div>
+            <Field label="Marina / Dock">
+              <input name="marina" required className={inputClass} placeholder="e.g. Marina Bay Harbor, Dock C" />
+            </Field>
+            <Field label="Street Address (optional)">
+              <input name="serviceStreetAddress" className={inputClass} />
+            </Field>
+            <Field label="City">
+              <input name="serviceCity" className={inputClass} />
+            </Field>
+            <Field label="State">
+              <input name="serviceState" className={inputClass} />
+            </Field>
             <div className="sm:col-span-2">
               <SubmitButton>Create Vessel</SubmitButton>
             </div>

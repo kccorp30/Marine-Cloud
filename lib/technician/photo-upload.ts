@@ -13,6 +13,7 @@ export interface AttemptPhotoUploadParams {
   mimeType: string;
   sizeBytes: number;
   caption?: string;
+  visibility: 'internal' | 'customer_visible' | 'kcc_only';
   capturedAt: string;
   clientGeneratedId: string; // ÚNICO id para toda la operación — se pasa desde afuera, nunca se genera acá adentro
 }
@@ -72,7 +73,7 @@ export async function attemptOnlinePhotoUpload(
     mimeType: params.mimeType,
     sizeBytes: params.sizeBytes,
     caption: params.caption,
-    visibility: 'internal',
+    visibility: params.visibility,
     capturedAt: params.capturedAt,
     clientGeneratedId,
   });

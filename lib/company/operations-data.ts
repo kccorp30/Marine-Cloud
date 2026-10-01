@@ -85,6 +85,15 @@ export interface CommercialSummary {
   pendingChangeOrdersCount: number;
 }
 
+export interface LiveOperationsRow {
+  workOrderId: string;
+  vesselName: string;
+  customerName: string | null;
+  technicianName: string | null;
+  currentStatus: string;
+  lastActivityAt: string | null;
+}
+
 export interface CompanyOperationsData {
   workOverview: WorkOverview;
   incomingRequests: IncomingRequestsSummary;
@@ -92,6 +101,10 @@ export interface CompanyOperationsData {
   upcomingAppointments: UpcomingAppointment[];
   alerts: OperationalAlert[];
   commercial: CommercialSummary;
+  // Item 6 del brief: work orders activos con su estado operacional
+  // real — se actualiza vía realtime (ver OrganizationRealtimeRefresh
+  // ya conectado en /company), nunca requiere refresh manual.
+  liveOperations: LiveOperationsRow[];
 }
 
 // Server-only — cada query pasa por RLS normal (is_org_staff), esta
@@ -324,6 +337,40 @@ export async function getCompanyOperationsData(
       .eq("type", "change_order"),
   ]);
 
+  // Item 6 del brief: work orders activos con vessel/customer/
+  // técnico/estado/último evento — RLS (is_org_staff) ya limita esto
+  // al tenant correcto, misma policy que el resto de queries acá.
+  const LIVE_OPERATIONS_STATUSES = [
+    "technician_assigned",
+    "en_route",
+    "checked_in",
+    "diagnosis",
+    "work_in_progress",
+    "waiting_parts",
+    "waiting_customer_approval",
+    "quality_control",
+  ];
+  const liveOps = await supabase
+    .from("work_orders")
+    .select(
+      "id, current_status, last_activity_at, vessel:vessels(name), customer:customers(first_name,last_name), assignments(status, technician:profiles(full_name))",
+    )
+    .eq("organization_id", organizationId)
+    .in("current_status", LIVE_OPERATIONS_STATUSES)
+    .order("last_activity_at", { ascending: false });
+
+  const liveOperations: LiveOperationsRow[] = (liveOps.data ?? []).map((wo: any) => {
+    const activeAssignment = (wo.assignments ?? []).find((a: any) => a.status === "active");
+    return {
+      workOrderId: wo.id,
+      vesselName: wo.vessel?.name ?? "Unnamed Vessel",
+      customerName: wo.customer ? `${wo.customer.first_name ?? ""} ${wo.customer.last_name ?? ""}`.trim() || null : null,
+      technicianName: activeAssignment?.technician?.full_name ?? null,
+      currentStatus: wo.current_status,
+      lastActivityAt: wo.last_activity_at,
+    };
+  });
+
   return {
     workOverview: {
       activeCount: activeWO.count ?? 0,
@@ -365,5 +412,6 @@ export async function getCompanyOperationsData(
       technicianName: null,
     })),
     alerts,
+    liveOperations,
   };
 }

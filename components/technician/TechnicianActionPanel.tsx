@@ -60,11 +60,16 @@ export function TechnicianActionPanel({
     setIsOnline(navigator.onLine);
     const goOnline = () => setIsOnline(true);
     const goOffline = () => setIsOnline(false);
+    const onHashChange = () => {
+      if (window.location.hash === "#evidence") setOpenPanel("photo");
+    };
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
+    window.addEventListener("hashchange", onHashChange);
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
+      window.removeEventListener("hashchange", onHashChange);
     };
   }, []);
 
@@ -102,36 +107,9 @@ export function TechnicianActionPanel({
         onNote={() => setOpenPanel("note")}
       />
       <div className="grid grid-cols-1 gap-2">
-        {currentStatus === "technician_assigned" && (
-          <BigButton
-            disabled={isPending || !isOnline}
-            onClick={() => run(() => startRoute(workOrderId))}
-          >
-            {" "}
-            <UiText text="START ROUTE" />{" "}
-          </BigButton>
-        )}
-
-        {currentStatus === "en_route" && appointmentId && (
-          <BigButton
-            disabled={isPending || !isOnline}
-            onClick={() => run(() => checkIn(appointmentId, workOrderId))}
-          >
-            {" "}
-            <UiText text="CHECK IN" />{" "}
-          </BigButton>
-        )}
-
-        {currentStatus === "checked_in" && (
-          <BigButton disabled={isPending || !isOnline} onClick={() => run(() => transitionWorkOrder(workOrderId, "diagnosis", "Technician started diagnostic"))}>
-            <UiText text="START DIAGNOSTIC" />
-          </BigButton>
-        )}
-        {currentStatus === "diagnosis" && (
-          <BigButton disabled={isPending || !isOnline} onClick={() => run(() => transitionWorkOrder(workOrderId, "work_in_progress", "Diagnostic complete — work started"))}>
-            <UiText text="START WORK" />
-          </BigButton>
-        )}
+        {/* technician_assigned / en_route / checked_in / diagnosis ahora
+            viven en <MissionHero> — nunca dos controles distintos
+            ofreciendo la misma transición de estado. */}
         {currentStatus === "work_in_progress" && (
           <>
             <BigButton disabled={isPending || !isOnline} onClick={() => run(() => transitionWorkOrder(workOrderId, "quality_control", "Technician submitted work for QC"))}>
@@ -307,6 +285,18 @@ function QuickAction({
   );
 }
 
+// Regla real de visibilidad por categoría (item 2 del brief):
+// BEFORE/DIAGNOSIS quedan internal por default (documentación
+// operacional, la compañía decide exponer selectivamente después).
+// PROGRESS y AFTER SÍ dejan elegir al técnico — nunca hardcodeado.
+function defaultVisibilityFor(category: string): "internal" | "customer_visible" {
+  if (category === "progress" || category === "after") return "customer_visible";
+  return "internal";
+}
+function categoryOffersVisibilityChoice(category: string): boolean {
+  return category === "progress" || category === "after";
+}
+
 function PhotoPanel({
   workOrderId,
   vesselId,
@@ -321,6 +311,11 @@ function PhotoPanel({
   isOnline: boolean;
 }) {
   const [category, setCategory] = useState("before");
+  const [visibility, setVisibility] = useState<"internal" | "customer_visible">(defaultVisibilityFor("before"));
+  function handleCategoryChange(c: string) {
+    setCategory(c);
+    setVisibility(defaultVisibilityFor(c));
+  }
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
@@ -364,7 +359,7 @@ function PhotoPanel({
         mimeType: file.type,
         sizeBytes: file.size,
         caption: caption.trim() || undefined,
-        visibility: "internal",
+        visibility,
         capturedAt,
       },
     });
@@ -413,6 +408,7 @@ function PhotoPanel({
         mimeType: file.type,
         sizeBytes: file.size,
         caption: caption.trim() || undefined,
+        visibility,
         capturedAt,
         clientGeneratedId,
       },
@@ -456,7 +452,7 @@ function PhotoPanel({
           (c) => (
             <button
               key={c}
-              onClick={() => setCategory(c)}
+              onClick={() => handleCategoryChange(c)}
               className={`text-[10px] uppercase tracking-[0.06em] px-2.5 py-1.5 rounded-sm border ${
                 category === c
                   ? "bg-gold text-navy border-gold"
@@ -468,6 +464,29 @@ function PhotoPanel({
           ),
         )}
       </div>
+
+      {categoryOffersVisibilityChoice(category) && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setVisibility("customer_visible")}
+            className={`flex-1 text-[10px] uppercase tracking-[0.06em] py-2 rounded-sm border ${
+              visibility === "customer_visible" ? "bg-gold text-navy border-gold" : "border-white/15 text-cool-gray"
+            }`}
+          >
+            Visible to customer
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibility("internal")}
+            className={`flex-1 text-[10px] uppercase tracking-[0.06em] py-2 rounded-sm border ${
+              visibility === "internal" ? "bg-gold text-navy border-gold" : "border-white/15 text-cool-gray"
+            }`}
+          >
+            Internal only
+          </button>
+        </div>
+      )}
 
       {preview ? (
         // eslint-disable-next-line @next/next/no-img-element
