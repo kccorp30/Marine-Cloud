@@ -10,6 +10,8 @@ import { getActiveOrganizationId } from '@/lib/auth/active-org';
 import { Card, PageTitle, Field, inputClass, SubmitButton, StatusBadge } from '@/components/ui/primitives';
 import { TransitionButtons } from '@/components/work-orders/TransitionButtons';
 import { TechnicianActionPanel } from '@/components/technician/TechnicianActionPanel';
+import { MissionHero } from '@/components/technician/MissionHero';
+import { MultiDayVisitPanel } from '@/components/technician/MultiDayVisitPanel';
 import { RequestAssistanceButton } from '@/components/kcc-assistance/RequestAssistanceButton';
 import { TechnicianTrackingControl } from '@/components/tracking/TechnicianTrackingControl';
 import { TrackingStatusPanel } from '@/components/tracking/TrackingStatusPanel';
@@ -18,11 +20,12 @@ import { getQcSubmissionsForWorkOrder, getCanReviewQc, getWorkOrderMediaForQc } 
 import { WarrantyCard } from '@/components/warranty/WarrantyCard';
 import { getWarrantyForWorkOrder } from '@/lib/warranty/data';
 import { ActivateWarrantyButton } from '@/components/warranty/ActivateWarrantyButton';
-import { Timeline } from '@/components/work-orders/Timeline';
-import { getWorkOrderTimeline } from '@/lib/data/timeline';
+import { WorkStory } from '@/components/work-orders/WorkStory';
+import { getWorkStory } from '@/lib/work-orders/work-story';
 import { CustomerTracking } from '@/components/work-orders/CustomerTracking';
 import { getCustomerWorkOrderTracking } from '@/lib/work-orders/customer-tracking';
 import { TrackingAutoRefresh } from '@/components/work-orders/TrackingAutoRefresh';
+import { WorkOrderRealtimeRefresh } from '@/components/work-orders/WorkOrderRealtimeRefresh';
 import { createDepositInvoiceAction, createInvoiceAction } from '@/lib/invoices/actions';
 import { DispatchMissionCard } from '@/components/work-orders/DispatchMissionCard';
 import { MissionRail } from '@/components/work-orders/MissionRail';
@@ -40,31 +43,32 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
 
   const { data: wo } = await supabase
     .from('work_orders')
-    .select('*, customer:customers(first_name, last_name, email, phone), vessel:vessels(name, hin, make, model)')
+    .select('*, customer:customers(first_name, last_name, email, phone), vessel:vessels(name, hin, make, model, marina, service_street_address, service_city, service_state)')
     .eq('id', id)
     .single();
 
   if (!wo) notFound();
 
-  const [{ data: assignments }, { data: appointments }, { data: rules }, timeline, { data: activeCheckIns }] = await Promise.all([
+  const [{ data: assignments }, { data: appointments }, { data: rules }, workStory, { data: activeCheckIns }, { count: beforePhotoCount }] = await Promise.all([
     supabase
       .from('assignments')
       .select('id, status, role_on_job, technician_profile_id, technician:profiles(full_name,avatar_url,phone)')
       .eq('work_order_id', id)
       .eq('status', 'active'),
-    supabase.from('appointments').select('id, scheduled_start, status, purpose').eq('work_order_id', id).order('scheduled_start'),
+    supabase.from('appointments').select('id, scheduled_start, status, purpose, actual_end, visit_outcome, visit_summary').eq('work_order_id', id).order('scheduled_start'),
     supabase
       .from('work_order_transition_rules')
       .select('to_status, allowed_roles')
       .eq('from_status', wo.current_status)
       .eq('active', true),
-    getWorkOrderTimeline(id),
+    getWorkStory(id),
     // Estado operativo REAL del técnico — derivado de un check-in sin
     // checkout, no una etiqueta decorativa. La ubicación (lat/lng)
     // solo existe mientras el check-in sigue activo — se deja de
     // mostrar apenas hace check-out (comportamiento de "location solo
     // en contexto de servicio activo" decidido en Phase 0).
     supabase.from('check_ins').select('technician_profile_id, checked_in_at, latitude, longitude').eq('work_order_id', id).is('checked_out_at', null),
+    supabase.from('media_assets').select('id', { count: 'exact', head: true }).eq('work_order_id', id).eq('category', 'before'),
   ]);
 
   // Solo se muestran los botones de transición que tu rol realmente
@@ -134,6 +138,23 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
   let activeTimeEntryId: string | null = null;
   let checklistItems: { id: string; label: string; response_type: string; completed: boolean }[] = [];
   const currentAppointmentId = appointments && appointments.length > 0 ? appointments[appointments.length - 1].id : null;
+
+  // --- Estado multi-día ---
+  // Una "visita" es un appointment cerrado bajo la MISMA orden. El
+  // número de día sale de cuántas ya se cerraron, no de una columna
+  // aparte que habría que mantener sincronizada.
+  const completedVisits = (appointments ?? []).filter((a: any) => a.status === 'completed');
+  const lastCompletedVisit = completedVisits.length > 0 ? completedVisits[completedVisits.length - 1] : null;
+  const previousVisit = lastCompletedVisit
+    ? {
+        summary: lastCompletedVisit.visit_summary ?? null,
+        outcome: lastCompletedVisit.visit_outcome ?? null,
+        finishedAt: lastCompletedVisit.actual_end ?? null,
+      }
+    : null;
+  // La cita a la que se hace check-in al volver: la próxima que sigue
+  // abierta, no la última creada.
+  const nextAppointment = (appointments ?? []).find((a: any) => a.status !== 'completed' && a.status !== 'cancelled') ?? null;
 
   if (isTechnician) {
     const [{ data: checkIn }, { data: timeEntry }, { data: templates }, { data: responses }] = await Promise.all([
@@ -237,6 +258,39 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
       {wo.customer&&<div className="mb-6"><ContactActions phone={wo.customer.phone} email={wo.customer.email} labels={copy}/></div>}
       {isTechnician && (
         <div className="mb-8">
+          <MissionHero
+            workOrderId={wo.id}
+            vesselId={wo.vessel_id}
+            appointmentId={currentAppointmentId}
+            currentStatus={wo.current_status}
+            vesselName={wo.vessel?.name || 'Unnamed Vessel'}
+            customerName={wo.customer ? `${wo.customer.first_name ?? ''} ${wo.customer.last_name ?? ''}`.trim() || null : null}
+            serviceLabel={wo.title || null}
+            serviceAddress={
+              [wo.vessel?.service_street_address, wo.vessel?.service_city, wo.vessel?.service_state].filter(Boolean).join(', ') ||
+              wo.vessel?.marina ||
+              null
+            }
+            beforePhotoCount={beforePhotoCount ?? 0}
+            beforePhotoMinimum={3}
+            locale={locale}
+          />
+          <div className="mt-6">
+            <MultiDayVisitPanel
+              workOrderId={wo.id}
+              currentStatus={wo.current_status}
+              hasOpenCheckIn={Boolean(activeCheckInId)}
+              completedVisits={completedVisits.length}
+              previousVisit={previousVisit}
+              nextAppointmentId={nextAppointment?.id ?? null}
+              serviceAddress={
+                [wo.vessel?.service_street_address, wo.vessel?.service_city, wo.vessel?.service_state].filter(Boolean).join(', ') ||
+                wo.vessel?.marina ||
+                null
+              }
+              locale={locale}
+            />
+          </div>
           <TechnicianActionPanel
             workOrderId={wo.id}
             vesselId={wo.vessel_id}
@@ -266,6 +320,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
         <>
           <CustomerTracking tracking={trackingData} />
           <TrackingAutoRefresh />
+          <WorkOrderRealtimeRefresh workOrderId={wo.id} />
           {['technician_assigned','en_route','checked_in'].includes(wo.current_status) && (
             <Card className="mb-8">
               <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-gold mb-3">Technician Location</div>
@@ -293,6 +348,11 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
           <TrackingStatusPanel workOrderId={wo.id} />
         </Card>
       )}
+
+      {/* Compañía/KCC ven cambios de estado en tiempo real — nunca
+          "funciona después de refrescar" para en route/arrived/work
+          started, etc. */}
+      {!isCustomer && <WorkOrderRealtimeRefresh workOrderId={wo.id} />}
 
       {!isCustomer && (wo.current_status === 'quality_control' || qcSubmissions.length > 0) && (
         <Card className="mb-8">
@@ -383,7 +443,7 @@ export default async function WorkOrderDetailPage({ params }: { params: Promise<
         )}
       </Card>
 
-      <Timeline entries={timeline} />
+      <WorkStory entries={workStory} locale={locale} />
     </div>
   );
 }

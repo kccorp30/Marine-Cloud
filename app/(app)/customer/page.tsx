@@ -13,6 +13,9 @@ import { CommandHero } from "@/components/ui/CommandHero";
 import { MetricCard } from "@/components/ui/command";
 import { StatusTimeline } from "@/components/ui/StatusTimeline";
 import { LuzPresence } from "@/components/luz/LuzPresence";
+import { WorkOrderRealtimeRefresh } from "@/components/work-orders/WorkOrderRealtimeRefresh";
+import { WorkStory } from "@/components/work-orders/WorkStory";
+import { getWorkStory } from "@/lib/work-orders/work-story";
 export default async function CustomerPage() {
   const session = await getSessionContext();
   const org = await getActiveOrganizationId(session.memberships);
@@ -38,6 +41,11 @@ export default async function CustomerPage() {
   const tracking = active
     ? await getCustomerWorkOrderTracking(active.id)
     : null;
+  // Mismo feed que ve la compañía y el técnico — RLS ya recorta a lo
+  // customer-visible, acá no se filtra nada por rol.
+  const story = active
+    ? await getWorkStory(active.id, { newestFirst: true, limit: 40 })
+    : [];
   const db = await createClient();
   const history = active
     ? await db
@@ -48,6 +56,7 @@ export default async function CustomerPage() {
     : null;
   return (
     <div className="command-stack">
+      {active && <WorkOrderRealtimeRefresh workOrderId={active.id} />}
       <CommandHero
         eyebrow="KCC · MARINE CLOUD"
         title={t.welcome}
@@ -106,6 +115,15 @@ export default async function CustomerPage() {
           </div>
           {active ? (
             <>
+              {active.currentStatus === "en_route" && (
+                <p className="mt-5 text-2xl font-bold text-gold animate-pulse-soft">{t.technicianOnTheWay}</p>
+              )}
+              {active.currentStatus === "checked_in" && (
+                <p className="mt-5 text-2xl font-bold text-gold">{t.technicianArrived}</p>
+              )}
+              {active.currentStatus === "work_in_progress" && (
+                <p className="mt-5 text-2xl font-bold text-gold">{t.serviceInProgress}</p>
+              )}
               <p className="mt-5 text-2xl font-semibold">
                 {active.vesselName || active.title}
               </p>
@@ -124,29 +142,22 @@ export default async function CustomerPage() {
                   {labels[active.currentStatus] || active.currentStatus}
                 </p>
               </div>
-              {tracking?.progressUpdates.slice(0, 3).map((update) => (
-                <article
-                  key={update.id}
-                  className="mt-5 border-t border-white/10 pt-5"
-                >
-                  <p className="text-sm leading-relaxed">{update.body}</p>
-                  <div className="flex gap-3 overflow-x-auto mt-3">
-                    {update.photoUrls.map((url) => (
-                      <a href={url} key={url} target="_blank" rel="noreferrer">
-                        <img
-                          src={url}
-                          alt={t.evidence}
-                          className="w-24 h-24 rounded-xl object-cover shrink-0"
-                          loading="lazy"
-                        />
-                      </a>
-                    ))}
-                  </div>
-                  <time className="text-xs text-cool-gray mt-3 block">
-                    {new Date(update.createdAt).toLocaleDateString(locale)}
-                  </time>
-                </article>
-              ))}
+              {/* Un solo feed — el mismo que ven compañía y técnico, ya
+                  recortado por RLS a lo customer-visible. Antes acá
+                  había un listado propio de progress updates que
+                  duplicaba parte de la historia y se perdía las fotos
+                  que no colgaban de un progress update. */}
+              <div className="mt-5 border-t border-white/10 pt-5">
+                <WorkStory entries={story} locale={locale} limit={6} />
+                {story.length > 6 && (
+                  <Link
+                    className="mt-3 inline-block text-sm text-gold"
+                    href={`/work-orders/${active.id}`}
+                  >
+                    {t.details} →
+                  </Link>
+                )}
+              </div>
             </>
           ) : (
             <p className="command-empty">{t.noWorkDetail}</p>

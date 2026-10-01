@@ -9,6 +9,7 @@ const baseParams = {
   file: new Blob(['fake-bytes'], { type: 'image/jpeg' }),
   mimeType: 'image/jpeg',
   sizeBytes: 11,
+  visibility: 'internal' as const,
   capturedAt: '2026-01-01T10:00:00.000Z',
   clientGeneratedId: 'photo-id-A',
 };

@@ -10,6 +10,7 @@ import { CommandHero } from "@/components/ui/CommandHero";
 import { MetricCard } from "@/components/ui/command";
 import { LuzBriefing } from "@/components/luz/LuzBriefing";
 import { TrackingAutoRefresh } from "@/components/work-orders/TrackingAutoRefresh";
+import { OrganizationRealtimeRefresh } from "@/components/work-orders/OrganizationRealtimeRefresh";
 import { getTechnicianPaySnapshot } from "@/lib/payroll/technician-summary";
 import { TechnicianPayCard } from "@/components/technician/TechnicianPayCard";
 export default async function TodayPage() {
@@ -67,6 +68,7 @@ export default async function TodayPage() {
   return (
     <div className="command-stack">
       <TrackingAutoRefresh />
+      <OrganizationRealtimeRefresh organizationId={org} />
       <CommandHero
         eyebrow={`KCC · ${t.field}`}
         title={t.welcome}

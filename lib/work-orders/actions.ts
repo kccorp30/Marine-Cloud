@@ -68,6 +68,10 @@ const CreateVesselSchema = z.object({
   make: z.string().optional(),
   model: z.string().optional(),
   year: z.coerce.number().int().min(1900).max(2100).optional(),
+  marina: z.string().optional(),
+  serviceStreetAddress: z.string().optional(),
+  serviceCity: z.string().optional(),
+  serviceState: z.string().optional(),
 });
 
 export async function createVessel(formData: FormData) {
@@ -79,6 +83,10 @@ export async function createVessel(formData: FormData) {
     make: formData.get('make'),
     model: formData.get('model'),
     year: formData.get('year') || undefined,
+    marina: formData.get('marina'),
+    serviceStreetAddress: formData.get('serviceStreetAddress'),
+    serviceCity: formData.get('serviceCity'),
+    serviceState: formData.get('serviceState'),
   });
   if (!parsed.success) {
     return {error:'Check the vessel details and customer.'};
@@ -95,6 +103,10 @@ export async function createVessel(formData: FormData) {
       make: parsed.data.make || null,
       model: parsed.data.model || null,
       year: parsed.data.year || null,
+      marina: parsed.data.marina || null,
+      service_street_address: parsed.data.serviceStreetAddress || null,
+      service_city: parsed.data.serviceCity || null,
+      service_state: parsed.data.serviceState || null,
       created_by: session.userId,
     })
     .select('id')
@@ -114,6 +126,55 @@ export async function createVessel(formData: FormData) {
 
   revalidatePath('/vessels');
   return {redirectTo:`/vessels/${vessel.id}`};
+}
+
+// Item 9 del brief: el campo existe desde Technician Mission pero
+// nadie podía editarlo — esta es la vía real para completarlo en un
+// vessel YA creado (la mayoría de los vessels existentes lo tienen
+// vacío). Company/manager/admin pueden llenarlo desde el detalle del
+// vessel; START ROUTE sigue rechazando server-side si sigue vacío.
+const UpdateVesselServiceAddressSchema = z.object({
+  vesselId: z.string().uuid(),
+  marina: z.string().optional(),
+  serviceStreetAddress: z.string().optional(),
+  serviceCity: z.string().optional(),
+  serviceState: z.string().optional(),
+  servicePostalCode: z.string().optional(),
+});
+
+export async function updateVesselServiceAddress(formData: FormData) {
+  const parsed = UpdateVesselServiceAddressSchema.safeParse({
+    vesselId: formData.get('vesselId'),
+    marina: formData.get('marina'),
+    serviceStreetAddress: formData.get('serviceStreetAddress'),
+    serviceCity: formData.get('serviceCity'),
+    serviceState: formData.get('serviceState'),
+    servicePostalCode: formData.get('servicePostalCode'),
+  });
+  if (!parsed.success) {
+    return { error: 'Check the address fields.' };
+  }
+
+  const supabase = await createClient();
+  // RLS (is_org_staff sobre vessels) ya exige ser staff de la
+  // organización dueña del vessel — nunca autorización extra acá.
+  const { error } = await supabase
+    .from('vessels')
+    .update({
+      marina: parsed.data.marina || null,
+      service_street_address: parsed.data.serviceStreetAddress || null,
+      service_city: parsed.data.serviceCity || null,
+      service_state: parsed.data.serviceState || null,
+      service_postal_code: parsed.data.servicePostalCode || null,
+    })
+    .eq('id', parsed.data.vesselId);
+
+  if (error) {
+    return safeErrorResponse(error, 'Could not update service location.');
+  }
+
+  revalidatePath(`/vessels/${parsed.data.vesselId}`);
+  return;
 }
 
 // ---------------------------------------------------------

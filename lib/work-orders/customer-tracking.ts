@@ -31,6 +31,14 @@ export interface CustomerTrackingProgressUpdate {
   photoUrls: string[];
 }
 
+export interface CustomerVisibleMediaItem {
+  id: string;
+  category: string;
+  url: string;
+  caption: string | null;
+  capturedAt: string | null;
+}
+
 export interface CustomerWorkOrderTracking {
   workOrderId: string;
   title: string;
@@ -45,6 +53,12 @@ export interface CustomerWorkOrderTracking {
   technician: CustomerTrackingTechnician | null;
   appointment: CustomerTrackingAppointment | null;
   progressUpdates: CustomerTrackingProgressUpdate[];
+  // Item 3 del brief: nunca exigir que una foto pertenezca a un
+  // progress_update para ser visible — cualquier media_assets con
+  // visibility='customer_visible' de ESTE work order, agrupada por
+  // categoría real (before/progress/damage/after/qc/etc.), sin
+  // importar si viene de un progress update o no.
+  mediaByCategory: Record<string, CustomerVisibleMediaItem[]>;
 }
 
 // Server-only a propósito (import 'server-only' arriba) — esta
@@ -159,6 +173,35 @@ export async function getCustomerWorkOrderTracking(
     }),
   );
 
+  // Item 3 del brief: query directa a media_assets, INDEPENDIENTE de
+  // progress_updates — cualquier foto customer_visible de este work
+  // order debe llegar acá, sin importar si un técnico la adjuntó a
+  // un progress update o no (ej. fotos BEFORE/AFTER marcadas
+  // explícitamente visibles). RLS ya exige visibility='customer_visible'
+  // O ser el dueño — el filtro explícito acá deja la intención clara
+  // en el código, mismo patrón que progress_updates arriba.
+  const { data: visibleMedia } = await supabase
+    .from("media_assets")
+    .select("id, category, storage_path, caption, captured_at")
+    .eq("work_order_id", workOrderId)
+    .eq("visibility", "customer_visible")
+    .is("deleted_at", null)
+    .order("captured_at", { ascending: false });
+
+  const mediaByCategory: Record<string, CustomerVisibleMediaItem[]> = {};
+  for (const m of visibleMedia ?? []) {
+    const { data: signed } = await supabase.storage.from("vessel-media").createSignedUrl(m.storage_path, 3600);
+    if (!signed?.signedUrl) continue;
+    const item: CustomerVisibleMediaItem = {
+      id: m.id,
+      category: m.category,
+      url: signed.signedUrl,
+      caption: m.caption ?? null,
+      capturedAt: m.captured_at ?? null,
+    };
+    (mediaByCategory[m.category] ??= []).push(item);
+  }
+
   return {
     workOrderId: wo.id,
     title: wo.title,
@@ -176,5 +219,6 @@ export async function getCustomerWorkOrderTracking(
     technician,
     appointment,
     progressUpdates,
+    mediaByCategory,
   };
 }

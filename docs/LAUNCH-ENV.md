@@ -17,3 +17,22 @@ The sender domain must be verified in Resend and in KCC Admin → company → em
 Stripe remains paused. The fixed monthly company charge uses the existing active operational subscription record and is collected manually from KCC Admin until paid plans are resumed.
 
 Do not enable Luz follow-ups before applying the two operational migrations and configuring the Resend webhook. No production migration or provider setting was changed during this review.
+
+## Website studio (KCC Admin → Website)
+
+Marine Cloud edits the public KCCORP website content. Both projects share the same Supabase project.
+
+Marine Cloud (this app), server-only:
+
+```text
+WEBSITE_URL=https://<your-website-domain>          # used for "View on website" links and to notify the site
+WEBSITE_REVALIDATE_SECRET=<long random string>     # must equal REVALIDATE_SECRET on the website
+```
+
+Website (kccorp-web), server-only:
+
+```text
+REVALIDATE_SECRET=<same long random string>
+```
+
+Without these two secrets everything still works; published changes simply take up to 5 minutes to appear instead of seconds. Never prefix either secret with `NEXT_PUBLIC_`. Requires migration `20261001000000_website_studio.sql`; optional draft copy in `supabase/seed/website-content-drafts.sql`. Full guide: `docs/WEBSITE-STUDIO.md`.

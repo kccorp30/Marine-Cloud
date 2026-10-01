@@ -12,6 +12,7 @@ import { MetricCard } from "@/components/ui/command";
 import { LuzPresence } from "@/components/luz/LuzPresence";
 import { CompanyKccAccountCard } from "@/components/kcc-control/CompanyKccAccountCard";
 import { getCompanyKccAccountSummary } from "@/lib/company/kcc-account";
+import { OrganizationRealtimeRefresh } from "@/components/work-orders/OrganizationRealtimeRefresh";
 export default async function CompanyPage() {
   const session = await getSessionContext();
   const org = await getActiveOrganizationId(session.memberships);
@@ -56,6 +57,41 @@ export default async function CompanyPage() {
   ]);
   return (
     <div className="command-stack kcc-company">
+      <OrganizationRealtimeRefresh organizationId={org} />
+
+      {data.liveOperations.length > 0 && (
+        <section className="command-panel">
+          <h2 className="command-panel-title">Live Operations</h2>
+          <div className="space-y-2">
+            {data.liveOperations.map((row) => (
+              <Link
+                key={row.workOrderId}
+                href={`/work-orders/${row.workOrderId}`}
+                className="flex items-center justify-between gap-3 glass rounded-lg p-3.5 hover:border-gold-dim/40 transition-all duration-150"
+              >
+                <div>
+                  <div className="text-sm font-medium text-marine-white">{row.vesselName}</div>
+                  <div className="text-xs text-cool-gray mt-0.5">
+                    {row.customerName ?? "—"}
+                    {row.technicianName && ` · ${row.technicianName}`}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-[9px] uppercase text-gold border border-gold-dim/60 bg-gold/[0.06] px-2 py-0.5 rounded-full">
+                    {(labels[row.currentStatus] ?? row.currentStatus).toString()}
+                  </span>
+                  {row.lastActivityAt && (
+                    <div className="text-[10px] text-cool-gray/70 mt-1 font-mono">
+                      {new Date(row.lastActivityAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <CommandHero
         eyebrow={membership.organization.name}
         title={t.welcome}
